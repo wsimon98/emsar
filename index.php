@@ -1,120 +1,144 @@
-<head>
-  <title>Encrypted Message Storage and Retrieval</title>
-  <style>
-    * {
-      font-family: Arial, sans-serif;
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+$decryptedMessage = ""; // Variable to hold the decrypted message
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    function sanitize($input) {
+        return htmlspecialchars(trim($input), ENT_QUOTES, 'UTF-8');
     }
-h1 {
-  text-align: center;
-  margin-top: 20px;
-  font-size: 36px;
-}
 
-form {
-  margin: 20px;
-  padding: 20px;
-  background-color: #f2f2f2;
-  border: 1px solid gray;
-  border-radius: 5px;
-}
+    if (isset($_POST['message'], $_POST['key'], $_POST['file-name'])) {
+        $message = sanitize($_POST['message']);
+        $key = sanitize($_POST['key']);
+        $filename = sanitize($_POST['file-name']);
+        if (strpos($filename, '.') === false) {
+            $filename .= '.txt'; // Default to .txt if no extension is provided
+        }
 
-input[type="text"], textarea {
-  margin-bottom: 20px;
-  padding: 10px;
-  width: 100%;
-  border: 1px solid gray;
-  border-radius: 5px;
-}
+        if (strlen($key) !== 16) {
+            echo '<p style="text-align: center; color: red;">Error: Encryption key must be 16 characters.</p>';
+        } elseif (file_exists($filename)) {
+            echo '<p style="text-align: center; color: orange;">File already exists! Choose a different name or delete the existing file.</p>';
+        } else {
+            $encryptedMessage = openssl_encrypt($message, 'AES-128-ECB', $key);
+            $result = file_put_contents($filename, $encryptedMessage);
+            if ($result === false) {
+                echo '<p style="text-align: center; color: red;">Error: Unable to save the file. Check permissions.</p>';
+            } else {
+                echo '<p style="text-align: center; color: green;">Message saved successfully as file: ' . $filename . '</p>';
+            }
+        }
+    }
 
-input[type="submit"] {
-  padding: 10px 20px;
-  background-color: blue;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
+    if (isset($_POST['key-to-open'], $_POST['filename'])) {
+        $key = sanitize($_POST['key-to-open']);
+        $filename = sanitize($_POST['filename']);
+        if (strpos($filename, '.') === false) {
+            $filename .= '.txt'; // Default to .txt if no extension is provided
+        }
 
-#message-popup {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #f2f2f2;
-  padding: 20px;
-  border: 1px solid gray;
-  border-radius: 5px;
-  display: none;
-}
+        if (file_exists($filename)) {
+            $encryptedMessage = file_get_contents($filename);
+            $decryptedMessage = openssl_decrypt($encryptedMessage, 'AES-128-ECB', $key);
 
-#message-popup.show {
-  display: block;
+            if ($decryptedMessage === false) {
+                $decryptedMessage = '<span style="color: red;">Error: Incorrect key or corrupted file.</span>';
+            }
+        } else {
+            $decryptedMessage = '<span style="color: red;">Error: File not found.</span>';
+        }
+    }
 }
-
-.close-button {
-  float: right;
-  cursor: pointer;
-  margin-top: -10px;
-  margin-right: -10px;
-  padding: 5px;
-  background-color: gray;
-  color: white;
-  border-radius: 50%;
-}
- </style>
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encrypted Message Storage and Retrieval</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            text-align: center;
+            margin: 20px;
+            color: #007bff;
+        }
+        form {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            display: block;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
-  <h1>Encrypted Message Storage and Retrieval</h1>
-  <script>
-    function showMessage(message) {
-      var popup = document.getElementById("message-popup");
-      popup.innerHTML = message + '<div class="close-button" onclick="hideMessage()">X</div>';
-      popup.classList.add("show");
-    }
-    
-    function hideMessage() {
-      var popup = document.getElementById("message-popup");
-      popup.innerHTML = "";
-      popup.classList.remove("show");
-    }
-  </script>
-  <div id="message-popup"></div>
-  <?php
-if (isset($_POST['message']) && isset($_POST['key']) && isset($_POST['file-name'])) {
-// Store the encrypted message as a text file
-$message = $_POST['message'];
-$key = $_POST['key'];
-$filename = $_POST['file-name'] . '.txt';
-file_put_contents($filename, openssl_encrypt($message, 'AES-128-ECB', $key));
-echo '<p style="text-align: center;">Message saved successfully as file ' . $filename . '!</p><br><br>';
-}
+    <h1>Encrypted Message Storage and Retrieval</h1>
 
-if (isset($_POST['key-to-open']) && isset($_POST['filename'])) {
-  // Decrypt the message and display it
-  $key = $_POST['key-to-open'];
-  $filename = $_POST['filename'];
-  $message = openssl_decrypt(file_get_contents($filename), 'AES-128-ECB', $key);
-  echo '<script>showMessage("' . $message . '")</script>';
-}
+    <form action="" method="post">
+        <label>Enter Message:</label>
+        <textarea name="message" required></textarea>
+        <label>Enter File Name:</label>
+        <input type="text" name="file-name" required>
+        <label>Enter Encryption Key (16 characters):</label>
+        <input type="text" name="key" maxlength="16" required>
+        <input type="submit" value="Save Message">
+    </form>
 
-?>
+    <form action="" method="post">
+        <label>Enter Filename:</label>
+        <input type="text" name="filename" required>
+        <label>Enter Decryption Key:</label>
+        <input type="text" name="key-to-open" maxlength="16" required>
+        <input type="submit" value="Open Message">
+    </form>
 
-<form action="index.php" method="post">
-  Enter message:<br>
-  <textarea name="message"></textarea><br><br>
-  Enter file name:<br>
-  <input type="text" name="file-name"><br><br>
-  Enter encryption key (16 characters, numbers, letters, and capital letters):<br>
-  <input type="text" name="key"><br><br>
-  <input type="submit" value="Save Message">
-</form>
-
-<br><br>
-
-<form action="index.php" method="post">
-  Enter filename:<br>
-  <input type="text" name="filename"><br><br>
-  Enter encryption key to open the message:<br>
-  <input type="text" name="key-to-open"><br><br>
-  <input type="submit" value="Open Message">
-</form>
+    <?php if (!empty($decryptedMessage)): ?>
+        <div class="output">
+            <strong>Decrypted Message:</strong>
+            <p><?= $decryptedMessage ?></p>
+        </div>
+    <?php endif; ?>
+</body>
+</html>
